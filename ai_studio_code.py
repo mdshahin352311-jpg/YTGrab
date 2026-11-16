@@ -1,0 +1,1594 @@
+import os
+
+ROOT = "YTGrab_Android"
+
+FILES = {
+    "build.gradle": r'''// Top-level build file
+plugins {
+    id 'com.android.application' version '8.5.0' apply false
+}
+''',
+
+    "settings.gradle": r'''pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = "YTGrab"
+include ':app'
+''',
+
+    "gradle.properties": r'''org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+android.useAndroidX=true
+android.enableJetifier=true
+''',
+
+    ".gitignore": r'''*.iml
+.gradle
+/local.properties
+/.idea/
+.DS_Store
+/build
+/app/build
+/captures
+.externalNativeBuild
+.cxx
+*.apk
+*.aab
+*.jks
+*.keystore
+''',
+
+    ".github/workflows/build-apk.yml": r'''name: Build YTGrab Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.7'
+
+      - name: Build Debug APK
+        run: |
+          if [ -f "./gradlew" ]; then
+            chmod +x gradlew
+            ./gradlew assembleDebug
+          else
+            gradle assembleDebug
+          fi
+
+      - name: Upload YTGrab APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: YTGrab-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+''',
+
+    "README.md": r'''# YTGrab — Android Video Downloader
+
+Multi-platform social media video & audio downloader for Android (Java + Material 3 + Firebase Realtime Database).
+
+## Build APK on GitHub
+1. Push the contents of `YTGrab_Android/` to GitHub (`main` or `master`).
+2. Open the **Actions** tab and download `YTGrab-debug-apk`.
+''',
+
+    "app/build.gradle": r'''plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.ytgrab.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.ytgrab.app"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    buildFeatures {
+        viewBinding true
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.core:core:1.13.1'
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+
+    implementation 'com.github.bumptech.glide:glide:4.16.0'
+    annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'
+
+    implementation platform('com.google.firebase:firebase-bom:33.7.0')
+    implementation 'com.google.firebase:firebase-database'
+}
+''',
+
+    "app/proguard-rules.pro": r'''-keep public class * implements com.bumptech.glide.module.GlideModule
+-keep class * extends com.bumptech.glide.module.AppGlideModule {
+ <init>(...);
+}
+-keep public enum com.bumptech.glide.load.ImageHeaderParser$** {
+  **[] $VALUES;
+  public *;
+}
+
+-keepattributes Signature
+-keepattributes *Annotation*
+-keepclassmembers class com.ytgrab.app.** { *; }
+''',
+
+    "app/src/main/AndroidManifest.xml": r'''<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.YTGrab"
+        android:usesCleartextTraffic="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+</manifest>
+''',
+
+    "app/src/main/java/com/ytgrab/app/FirebaseHelper.java": r'''package com.ytgrab.app;
+
+import android.content.Context;
+import android.text.TextUtils;
+
+import androidx.annotation.NonNull;
+
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.FirebaseOptions;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ServerValue;
+import com.google.firebase.database.ValueEventListener;
+
+import java.util.HashMap;
+import java.util.Map;
+
+public class FirebaseHelper {
+
+    private static final String APP_INSTANCE_NAME = "ytgrab";
+    private static final String API_KEY           = "AIzaSyD9xSRTLhlZdq-dCz2Zdt4WrgYeZc7Q51I";
+    private static final String APPLICATION_ID    = "1:687875645988:web:111d7f91256122c7da2eb1";
+    private static final String DATABASE_URL      = "https://ytgrab-ff449-default-rtdb.firebaseio.com";
+    private static final String PROJECT_ID        = "ytgrab-ff449";
+    private static final String STORAGE_BUCKET    = "ytgrab-ff449.firebasestorage.app";
+    private static final String SENDER_ID         = "687875645988";
+
+    public interface ConfigCallback {
+        void onConfigLoaded(String apiKey, String apiHost, String apiUrl,
+                            boolean maintenance, String notice);
+    }
+
+    private DatabaseReference rootRef;
+
+    public FirebaseHelper(Context context) {
+        try {
+            Context appCtx = context.getApplicationContext();
+            FirebaseOptions options = new FirebaseOptions.Builder()
+                    .setApiKey(API_KEY)
+                    .setApplicationId(APPLICATION_ID)
+                    .setDatabaseUrl(DATABASE_URL)
+                    .setProjectId(PROJECT_ID)
+                    .setStorageBucket(STORAGE_BUCKET)
+                    .setGcmSenderId(SENDER_ID)
+                    .build();
+
+            FirebaseApp app;
+            try {
+                app = FirebaseApp.getInstance(APP_INSTANCE_NAME);
+            } catch (IllegalStateException e) {
+                app = FirebaseApp.initializeApp(appCtx, options, APP_INSTANCE_NAME);
+            }
+
+            FirebaseDatabase db = FirebaseDatabase.getInstance(app);
+            rootRef = db.getReference();
+        } catch (Exception ignored) {
+        }
+    }
+
+    public void fetchRemoteConfig(ConfigCallback callback) {
+        if (rootRef == null || callback == null) return;
+
+        rootRef.child("app_config").addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (!snapshot.exists()) return;
+
+                String rKey   = snapshot.child("api_key").getValue(String.class);
+                String rHost  = snapshot.child("api_host").getValue(String.class);
+                String rUrl   = snapshot.child("api_url").getValue(String.class);
+                Boolean maint = snapshot.child("maintenance").getValue(Boolean.class);
+                String notice = snapshot.child("notice").getValue(String.class);
+
+                callback.onConfigLoaded(
+                        !TextUtils.isEmpty(rKey) ? rKey : null,
+                        !TextUtils.isEmpty(rHost) ? rHost : null,
+                        !TextUtils.isEmpty(rUrl) ? rUrl : null,
+                        maint != null && maint,
+                        notice != null ? notice : ""
+                );
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+            }
+        });
+    }
+
+    public void logFetchAttempt(String platform) {
+        if (rootRef == null) return;
+        rootRef.child("stats").child("total_fetches").setValue(ServerValue.increment(1));
+    }
+
+    public void logFetchSuccess(String platform, int formatCount) {
+        if (rootRef == null) return;
+        String safePlatform = platform.toLowerCase().replaceAll("[^a-z0-9_]", "_");
+        rootRef.child("stats").child("platforms").child(safePlatform)
+                .child("fetches").setValue(ServerValue.increment(1));
+    }
+
+    public void logFetchError(String platform, String reason) {
+        if (rootRef == null) return;
+        Map<String, Object> err = new HashMap<>();
+        err.put("platform", platform);
+        err.put("reason", reason != null ? reason.substring(0, Math.min(reason.length(), 120)) : "unknown");
+        err.put("time", ServerValue.TIMESTAMP);
+        rootRef.child("analytics").child("errors").push().setValue(err);
+    }
+
+    public void logDownloadClicked(String platform, String quality, boolean isAudio) {
+        if (rootRef == null) return;
+        rootRef.child("stats").child("total_downloads").setValue(ServerValue.increment(1));
+        String safePlatform = platform.toLowerCase().replaceAll("[^a-z0-9_]", "_");
+        rootRef.child("stats").child("platforms").child(safePlatform)
+                .child("downloads").setValue(ServerValue.increment(1));
+
+        Map<String, Object> evt = new HashMap<>();
+        evt.put("platform", platform);
+        evt.put("quality", quality);
+        evt.put("type", isAudio ? "audio" : "video");
+        evt.put("time", ServerValue.TIMESTAMP);
+        rootRef.child("analytics").child("downloads").push().setValue(evt);
+    }
+}
+''',
+
+    "app/src/main/java/com/ytgrab/app/VideoFormat.java": r'''package com.ytgrab.app;
+
+import java.util.Locale;
+
+public class VideoFormat {
+
+    private final String quality;
+    private final String downloadUrl;
+    private final long fileSizeBytes;
+    private final String formattedSizeOverride;
+    private final String extension;
+    private final boolean isAudio;
+
+    public VideoFormat(String quality, String downloadUrl,
+                       long fileSizeBytes, boolean isAudio) {
+        this(quality, downloadUrl, fileSizeBytes, "", isAudio ? "m4a" : "mp4", isAudio);
+    }
+
+    public VideoFormat(String quality, String downloadUrl,
+                       long fileSizeBytes, String formattedSizeOverride,
+                       String extension, boolean isAudio) {
+        this.quality = quality;
+        this.downloadUrl = downloadUrl;
+        this.fileSizeBytes = fileSizeBytes;
+        this.formattedSizeOverride = formattedSizeOverride != null ? formattedSizeOverride : "";
+        this.extension = (extension != null && !extension.isEmpty())
+                ? extension.toLowerCase(Locale.US)
+                : (isAudio ? "m4a" : "mp4");
+        this.isAudio = isAudio;
+    }
+
+    public String getQuality()     { return quality; }
+    public String getDownloadUrl() { return downloadUrl; }
+    public String getExtension()   { return extension; }
+    public boolean isAudio()       { return isAudio; }
+
+    public String getFormattedSize() {
+        if (!formattedSizeOverride.isEmpty()) {
+            return formattedSizeOverride;
+        }
+        if (fileSizeBytes <= 0) return "";
+        if (fileSizeBytes < 1024 * 1024) {
+            double kb = fileSizeBytes / 1024.0;
+            return String.format(Locale.US, "~%.0f KB", kb);
+        }
+        double mb = fileSizeBytes / (1024.0 * 1024.0);
+        if (mb >= 1024) {
+            return String.format(Locale.US, "~%.2f GB", mb / 1024.0);
+        }
+        return String.format(Locale.US, "~%.1f MB", mb);
+    }
+
+    public String getTypeLabel() {
+        String extUpper = extension.toUpperCase(Locale.US);
+        return isAudio ? "Audio (" + extUpper + ")" : "Video (" + extUpper + ")";
+    }
+}
+''',
+
+    "app/src/main/java/com/ytgrab/app/FormatAdapter.java": r'''package com.ytgrab.app;
+
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.google.android.material.button.MaterialButton;
+
+import java.util.List;
+
+public class FormatAdapter extends RecyclerView.Adapter<FormatAdapter.VH> {
+
+    public interface OnSaveClick {
+        void onSave(VideoFormat format);
+    }
+
+    private final List<VideoFormat> items;
+    private final OnSaveClick listener;
+
+    public FormatAdapter(List<VideoFormat> items, OnSaveClick listener) {
+        this.items = items;
+        this.listener = listener;
+    }
+
+    @NonNull
+    @Override
+    public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View v = LayoutInflater.from(parent.getContext())
+                .inflate(R.layout.item_format, parent, false);
+        return new VH(v);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull VH h, int pos) {
+        VideoFormat f = items.get(pos);
+
+        h.tvBadge.setText(f.getQuality());
+        h.tvType.setText(f.getTypeLabel());
+
+        String size = f.getFormattedSize();
+        h.tvSize.setVisibility(size.isEmpty() ? View.GONE : View.VISIBLE);
+        h.tvSize.setText(size);
+
+        if (f.isAudio()) {
+            h.tvBadge.setBackgroundResource(R.drawable.bg_badge_audio);
+            h.tvBadge.setTextColor(h.itemView.getContext().getColor(R.color.orange_dark));
+            h.btnSave.setBackgroundTintList(
+                    h.itemView.getContext().getColorStateList(R.color.orange_dark));
+        } else {
+            h.tvBadge.setBackgroundResource(R.drawable.bg_badge_video);
+            h.tvBadge.setTextColor(h.itemView.getContext().getColor(R.color.pink));
+            h.btnSave.setBackgroundTintList(
+                    h.itemView.getContext().getColorStateList(R.color.pink));
+        }
+
+        h.btnSave.setOnClickListener(v -> listener.onSave(f));
+    }
+
+    @Override
+    public int getItemCount() {
+        return items.size();
+    }
+
+    static class VH extends RecyclerView.ViewHolder {
+        TextView tvBadge, tvType, tvSize;
+        MaterialButton btnSave;
+
+        VH(View v) {
+            super(v);
+            tvBadge = v.findViewById(R.id.tvBadge);
+            tvType  = v.findViewById(R.id.tvType);
+            tvSize  = v.findViewById(R.id.tvSize);
+            btnSave = v.findViewById(R.id.btnSave);
+        }
+    }
+}
+''',
+
+    "app/src/main/java/com/ytgrab/app/MainActivity.java": r'''package com.ytgrab.app;
+
+import android.Manifest;
+import android.animation.ObjectAnimator;
+import android.app.DownloadManager;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Environment;
+import android.text.TextUtils;
+import android.util.Patterns;
+import android.view.View;
+import android.view.animation.DecelerateInterpolator;
+import android.widget.Toast;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
+
+import com.bumptech.glide.Glide;
+import com.ytgrab.app.databinding.ActivityMainBinding;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class MainActivity extends AppCompatActivity {
+
+    private String apiKey  = "f836dbbad3msh5981590251cc552p1b1e43jsn228947e54ed4";
+    private String apiHost = "hd-video-downloader.p.rapidapi.com";
+    private String apiUrl  = "https://hd-video-downloader.p.rapidapi.com/hd?url=";
+    private boolean isMaintenanceMode = false;
+
+    private ActivityMainBinding binding;
+    private FormatAdapter adapter;
+    private FirebaseHelper firebaseHelper;
+
+    private final List<VideoFormat> formatList = new ArrayList<>();
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+
+    private String currentPlatform = "Social Media";
+    private String parsedThumbnail = "";
+    private String parsedTitle     = "";
+    private VideoFormat pendingDownloadFormat;
+
+    private final ActivityResultLauncher<String> storagePermLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+                if (granted && pendingDownloadFormat != null) {
+                    enqueueDownload(pendingDownloadFormat);
+                } else if (pendingDownloadFormat != null) {
+                    openInBrowser(pendingDownloadFormat.getDownloadUrl());
+                }
+                pendingDownloadFormat = null;
+            });
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        binding = ActivityMainBinding.inflate(getLayoutInflater());
+        setContentView(binding.getRoot());
+
+        firebaseHelper = new FirebaseHelper(this);
+        loadRemoteConfig();
+
+        setupRecycler();
+        setupClickListeners();
+        handleShareIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleShareIntent(intent);
+    }
+
+    private void loadRemoteConfig() {
+        firebaseHelper.fetchRemoteConfig((rKey, rHost, rUrl, maintenance, notice) -> {
+            if (isFinishing() || isDestroyed()) return;
+            if (rKey != null)  apiKey = rKey;
+            if (rHost != null) apiHost = rHost;
+            if (rUrl != null)  apiUrl = rUrl;
+            isMaintenanceMode = maintenance;
+
+            if (maintenance) {
+                showError(!TextUtils.isEmpty(notice)
+                        ? notice
+                        : "Server is currently under maintenance. Please try again later.");
+            } else if (!TextUtils.isEmpty(notice)) {
+                Toast.makeText(this, notice, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void handleShareIntent(Intent intent) {
+        if (intent != null && Intent.ACTION_SEND.equals(intent.getAction())) {
+            String shared = intent.getStringExtra(Intent.EXTRA_TEXT);
+            if (!TextUtils.isEmpty(shared)) {
+                String extracted = extractFirstUrl(shared);
+                binding.etUrl.setText(extracted != null ? extracted : shared.trim());
+                if (extracted != null) {
+                    startFetch();
+                }
+            }
+        }
+    }
+
+    private void setupRecycler() {
+        adapter = new FormatAdapter(formatList, this::handleDownloadClick);
+        binding.rvFormats.setLayoutManager(new LinearLayoutManager(this));
+        binding.rvFormats.setNestedScrollingEnabled(false);
+        binding.rvFormats.setAdapter(adapter);
+    }
+
+    private void handleDownloadClick(VideoFormat format) {
+        String dlUrl = format.getDownloadUrl();
+        if (TextUtils.isEmpty(dlUrl) || !dlUrl.startsWith("http")) {
+            Toast.makeText(this, "Invalid download link", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        firebaseHelper.logDownloadClicked(currentPlatform, format.getQuality(), format.isAudio());
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED) {
+                pendingDownloadFormat = format;
+                storagePermLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+                return;
+            }
+        }
+
+        enqueueDownload(format);
+    }
+
+    private void enqueueDownload(VideoFormat format) {
+        try {
+            DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+            if (dm == null) {
+                openInBrowser(format.getDownloadUrl());
+                return;
+            }
+
+            String safePlatform = currentPlatform.replaceAll("[^a-zA-Z0-9]", "");
+            String safeQuality = format.getQuality().replaceAll("[^a-zA-Z0-9]", "");
+            String fileName = "YTGrab_" + safePlatform + "_" + safeQuality + "_"
+                    + (System.currentTimeMillis() / 1000) + "." + format.getExtension();
+
+            DownloadManager.Request req = new DownloadManager.Request(Uri.parse(format.getDownloadUrl()));
+            req.setTitle(fileName);
+            req.setDescription("Downloading " + currentPlatform + " media");
+            req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+            req.setAllowedOverMetered(true);
+            req.setAllowedOverRoaming(true);
+            req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
+
+            dm.enqueue(req);
+            Toast.makeText(this, "Downloading to Downloads/" + fileName, Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            openInBrowser(format.getDownloadUrl());
+        }
+    }
+
+    private void openInBrowser(String url) {
+        try {
+            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            startActivity(i);
+        } catch (Exception e) {
+            Toast.makeText(this, "No app found to open this link", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void setupClickListeners() {
+        binding.btnPaste.setOnClickListener(v -> {
+            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm != null && cm.hasPrimaryClip()) {
+                ClipData clip = cm.getPrimaryClip();
+                if (clip != null && clip.getItemCount() > 0) {
+                    CharSequence raw = clip.getItemAt(0).coerceToText(this);
+                    if (!TextUtils.isEmpty(raw)) {
+                        String extracted = extractFirstUrl(raw.toString());
+                        String value = extracted != null ? extracted : raw.toString().trim();
+                        binding.etUrl.setText(value);
+                        binding.etUrl.setSelection(value.length());
+                        return;
+                    }
+                }
+            }
+            Toast.makeText(this, "Clipboard is empty", Toast.LENGTH_SHORT).show();
+        });
+
+        binding.btnDownload.setOnClickListener(v -> startFetch());
+
+        binding.btnClear.setOnClickListener(v -> {
+            binding.etUrl.setText("");
+            hideResult();
+            hideError();
+        });
+
+        binding.chipYoutube.setOnClickListener(v ->
+                binding.etUrl.setHint("Paste YouTube link..."));
+        binding.chipFacebook.setOnClickListener(v ->
+                binding.etUrl.setHint("Paste Facebook link..."));
+        binding.chipInstagram.setOnClickListener(v ->
+                binding.etUrl.setHint("Paste Instagram link..."));
+        binding.chipTiktok.setOnClickListener(v ->
+                binding.etUrl.setHint("Paste TikTok link..."));
+        binding.chipTwitter.setOnClickListener(v ->
+                binding.etUrl.setHint("Paste Twitter/X link..."));
+    }
+
+    private void startFetch() {
+        if (isMaintenanceMode) {
+            showError("App is currently under maintenance. Please try again later.");
+            return;
+        }
+
+        String rawInput = binding.etUrl.getText() != null
+                ? binding.etUrl.getText().toString().trim() : "";
+
+        if (TextUtils.isEmpty(rawInput)) {
+            showError("Please paste a video URL first.");
+            return;
+        }
+
+        String url = extractFirstUrl(rawInput);
+        if (url == null || !Patterns.WEB_URL.matcher(url).matches()) {
+            showError("Invalid URL. Make sure to paste a valid http/https link.");
+            return;
+        }
+
+        currentPlatform = detectPlatform(url);
+        parsedThumbnail = "";
+        parsedTitle = "";
+
+        setLoading(true);
+        hideResult();
+        hideError();
+        firebaseHelper.logFetchAttempt(currentPlatform);
+
+        executor.execute(() -> {
+            HttpURLConnection conn = null;
+            try {
+                String requestUrl = apiUrl + URLEncoder.encode(url, "UTF-8");
+                conn = (HttpURLConnection) new URL(requestUrl).openConnection();
+                conn.setRequestMethod("GET");
+                conn.setRequestProperty("X-RapidAPI-Key", apiKey);
+                conn.setRequestProperty("X-RapidAPI-Host", apiHost);
+                conn.setConnectTimeout(15_000);
+                conn.setReadTimeout(20_000);
+
+                int code = conn.getResponseCode();
+                InputStream stream = (code < 400) ? conn.getInputStream() : conn.getErrorStream();
+                StringBuilder sb = new StringBuilder();
+                if (stream != null) {
+                    try (BufferedReader br = new BufferedReader(
+                            new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+                        String line;
+                        while ((line = br.readLine()) != null) {
+                            sb.append(line);
+                        }
+                    }
+                }
+
+                String json = sb.toString();
+                if (code >= 400) {
+                    String apiMsg = extractErrorMessage(json, "Server returned error (" + code + ")");
+                    runOnUiThread(() -> {
+                        if (isFinishing() || isDestroyed()) return;
+                        setLoading(false);
+                        firebaseHelper.logFetchError(currentPlatform, apiMsg);
+                        showError(apiMsg);
+                    });
+                    return;
+                }
+
+                List<VideoFormat> results = parseResponse(json);
+
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    setLoading(false);
+                    if (results.isEmpty()) {
+                        String apiMsg = extractErrorMessage(json,
+                                "No downloadable links found. Check the URL and try again.");
+                        firebaseHelper.logFetchError(currentPlatform, apiMsg);
+                        showError(apiMsg);
+                    } else {
+                        firebaseHelper.logFetchSuccess(currentPlatform, results.size());
+                        showResult(results, url);
+                    }
+                });
+
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    setLoading(false);
+                    String msg = "Network error: " + (e.getMessage() != null ? e.getMessage() : "Connection failed");
+                    firebaseHelper.logFetchError(currentPlatform, msg);
+                    showError(msg);
+                });
+            } finally {
+                if (conn != null) {
+                    conn.disconnect();
+                }
+            }
+        });
+    }
+
+    private List<VideoFormat> parseResponse(String json) {
+        List<VideoFormat> list = new ArrayList<>();
+        if (TextUtils.isEmpty(json)) return list;
+
+        try {
+            String trimmed = json.trim();
+            if (trimmed.startsWith("[")) {
+                parseFormatArray(new JSONArray(trimmed), list);
+                return list;
+            }
+
+            JSONObject root = new JSONObject(trimmed);
+
+            parsedThumbnail = root.optString("thumbnail",
+                    root.optString("thumb",
+                    root.optString("picture", "")));
+            parsedTitle = root.optString("title", "");
+
+            if (root.has("data") && root.optJSONObject("data") != null) {
+                JSONObject data = root.getJSONObject("data");
+                if (parsedThumbnail.isEmpty()) {
+                    parsedThumbnail = data.optString("thumbnail", data.optString("cover", ""));
+                }
+                if (parsedTitle.isEmpty()) {
+                    parsedTitle = data.optString("title", "");
+                }
+                extractFromObject(data, list);
+            }
+
+            extractFromObject(root, list);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return list;
+    }
+
+    private void extractFromObject(JSONObject obj, List<VideoFormat> list) throws Exception {
+        if (obj.has("medias")) {
+            parseFormatArray(obj.getJSONArray("medias"), list);
+        } else if (obj.has("formats")) {
+            parseFormatArray(obj.getJSONArray("formats"), list);
+        } else if (obj.has("links")) {
+            parseFormatArray(obj.getJSONArray("links"), list);
+        } else if (obj.has("url")) {
+            String dlUrl = obj.optString("url", "");
+            if (!dlUrl.isEmpty()) {
+                list.add(new VideoFormat("HD", dlUrl, 0, "", "mp4", false));
+            }
+        }
+    }
+
+    private void parseFormatArray(JSONArray arr, List<VideoFormat> list) {
+        for (int i = 0; i < arr.length(); i++) {
+            JSONObject f = arr.optJSONObject(i);
+            if (f == null) continue;
+
+            String dlUrl = f.optString("url", f.optString("link", ""));
+            if (dlUrl.isEmpty()) continue;
+
+            String q = f.optString("quality",
+                    f.optString("format",
+                    f.optString("resolution",
+                    f.optString("ext", "Format " + (i + 1)))));
+
+            String ext = f.optString("extension", f.optString("ext", ""));
+            long size = f.optLong("filesize", f.optLong("size", 0));
+            String formattedSize = f.optString("formattedSize", "");
+            String vcodec = f.optString("vcodec", "");
+            String type = f.optString("type", "").toLowerCase(Locale.US);
+
+            boolean isAudio = "audio".equals(type)
+                    || q.toLowerCase(Locale.US).contains("audio")
+                    || q.toLowerCase(Locale.US).contains("mp3")
+                    || q.toLowerCase(Locale.US).contains("m4a")
+                    || "mp3".equalsIgnoreCase(ext)
+                    || "m4a".equalsIgnoreCase(ext)
+                    || "none".equalsIgnoreCase(vcodec);
+
+            list.add(new VideoFormat(
+                    q.toUpperCase(Locale.US),
+                    dlUrl,
+                    size,
+                    formattedSize,
+                    ext,
+                    isAudio
+            ));
+        }
+    }
+
+    private String extractErrorMessage(String json, String fallback) {
+        try {
+            JSONObject root = new JSONObject(json);
+            String msg = root.optString("message", root.optString("error", ""));
+            if (!TextUtils.isEmpty(msg)) return msg;
+        } catch (Exception ignored) {
+        }
+        return fallback;
+    }
+
+    private void setLoading(boolean loading) {
+        binding.btnDownload.setEnabled(!loading);
+        binding.progressBar.setVisibility(loading ? View.VISIBLE : View.GONE);
+        binding.tvDownloadBtnText.setText(loading ? "Fetching…" : "Download");
+    }
+
+    private void showResult(List<VideoFormat> results, String originalUrl) {
+        String thumbToLoad = parsedThumbnail;
+        if (TextUtils.isEmpty(thumbToLoad)) {
+            String ytId = getYtId(originalUrl);
+            if (ytId != null) {
+                thumbToLoad = "https://img.youtube.com/vi/" + ytId + "/hqdefault.jpg";
+            }
+        }
+
+        if (!TextUtils.isEmpty(thumbToLoad)) {
+            binding.tvThumbPlaceholder.setVisibility(View.GONE);
+            Glide.with(this)
+                    .load(thumbToLoad)
+                    .placeholder(R.drawable.bg_thumb_placeholder)
+                    .error(R.drawable.bg_thumb_placeholder)
+                    .into(binding.ivThumb);
+            binding.ivThumb.setVisibility(View.VISIBLE);
+        } else {
+            binding.ivThumb.setVisibility(View.GONE);
+            binding.tvThumbPlaceholder.setVisibility(View.VISIBLE);
+        }
+
+        String headerText = !TextUtils.isEmpty(parsedTitle)
+                ? currentPlatform + " • " + parsedTitle
+                : currentPlatform;
+        binding.tvPlatform.setText(headerText);
+        binding.tvFormatCount.setText(results.size() + " format(s) found");
+
+        formatList.clear();
+        formatList.addAll(results);
+        adapter.notifyDataSetChanged();
+
+        binding.cardResult.setVisibility(View.VISIBLE);
+        ObjectAnimator anim = ObjectAnimator.ofFloat(binding.cardResult, "alpha", 0f, 1f);
+        anim.setDuration(300);
+        anim.setInterpolator(new DecelerateInterpolator());
+        anim.start();
+
+        binding.scrollView.post(() ->
+                binding.scrollView.smoothScrollTo(0, binding.cardResult.getTop()));
+    }
+
+    private void hideResult() {
+        binding.cardResult.setVisibility(View.GONE);
+        formatList.clear();
+        if (adapter != null) adapter.notifyDataSetChanged();
+    }
+
+    private void showError(String msg) {
+        binding.tvError.setText(msg);
+        binding.cardError.setVisibility(View.VISIBLE);
+    }
+
+    private void hideError() {
+        binding.cardError.setVisibility(View.GONE);
+    }
+
+    private String extractFirstUrl(String text) {
+        if (TextUtils.isEmpty(text)) return null;
+        Matcher m = Pattern.compile("(https?://\\S+)").matcher(text);
+        return m.find() ? m.group(1) : null;
+    }
+
+    private String getYtId(String url) {
+        Pattern p = Pattern.compile(
+                "(?:v=|/embed/|/shorts/|youtu\\.be/)([a-zA-Z0-9_-]{11})");
+        Matcher m = p.matcher(url);
+        return m.find() ? m.group(1) : null;
+    }
+
+    private String detectPlatform(String url) {
+        String lower = url.toLowerCase(Locale.US);
+        if (lower.contains("youtu")) return "YouTube";
+        if (lower.contains("facebook") || lower.contains("fb.watch")) return "Facebook";
+        if (lower.contains("instagram")) return "Instagram";
+        if (lower.contains("tiktok")) return "TikTok";
+        if (lower.contains("twitter") || lower.contains("x.com")) return "Twitter / X";
+        if (lower.contains("linkedin")) return "LinkedIn";
+        return "Social Media";
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        executor.shutdownNow();
+    }
+}
+''',
+
+    "app/src/main/res/values/colors.xml": r'''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="pink">#E91E63</color>
+    <color name="pink_dark">#C2185B</color>
+    <color name="pink_light">#FCE4EC</color>
+    <color name="orange_dark">#EF6C00</color>
+    <color name="orange_light">#FFF3E0</color>
+
+    <color name="bg_page">#FFF8FA</color>
+    <color name="card_bg">#FFFFFF</color>
+    <color name="input_bg">#F8F4F6</color>
+    <color name="text_primary">#1E1B1E</color>
+    <color name="text_secondary">#6B646B</color>
+    <color name="divider">#EFE8EC</color>
+
+    <color name="error_bg">#FFEBEE</color>
+    <color name="error_text">#C62828</color>
+    <color name="white">#FFFFFF</color>
+</resources>
+''',
+
+    "app/src/main/res/values/strings.xml": r'''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">YTGrab</string>
+    <string name="tagline">Download videos from YouTube, Facebook, Instagram, TikTok &amp; X</string>
+    <string name="hint_url">Paste video link here...</string>
+</resources>
+''',
+
+    "app/src/main/res/values/themes.xml": r'''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.YTGrab" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">@color/pink</item>
+        <item name="colorPrimaryDark">@color/pink_dark</item>
+        <item name="colorAccent">@color/pink</item>
+        <item name="android:statusBarColor">@color/pink_dark</item>
+        <item name="android:windowBackground">@color/bg_page</item>
+    </style>
+</resources>
+''',
+
+    "app/src/main/res/xml/file_paths.xml": r'''<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <external-path
+        name="downloads"
+        path="Download/" />
+    <cache-path
+        name="cache"
+        path="." />
+</paths>
+''',
+
+    "app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml": r'''<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
+''',
+
+    "app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml": r'''<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
+''',
+
+    "app/src/main/res/drawable/ic_launcher_background.xml": r'''<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient
+        android:angle="135"
+        android:startColor="#E91E63"
+        android:endColor="#AD1457" />
+</shape>
+''',
+
+    "app/src/main/res/drawable/ic_launcher_foreground.xml": r'''<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,28c-2.2,0 -4,1.8 -4,4v22.3l-8.6,-8.6c-1.6,-1.6 -4.1,-1.6 -5.7,0s-1.6,4.1 0,5.7l15.4,15.4c1.6,1.6 4.1,1.6 5.7,0l15.4,-15.4c1.6,-1.6 1.6,-4.1 0,-5.7s-4.1,-1.6 -5.7,0L58,54.3V32C58,29.8 56.2,28 54,28zM32,74c-2.2,0 -4,1.8 -4,4s1.8,4 4,4h44c2.2,0 4,-1.8 4,-4s-1.8,-4 -4,-4H32z" />
+</vector>
+''',
+
+    "app/src/main/res/drawable/bg_gradient_header.xml": r'''<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient
+        android:angle="135"
+        android:startColor="#E91E63"
+        android:endColor="#C2185B" />
+    <corners
+        android:bottomLeftRadius="28dp"
+        android:bottomRightRadius="28dp" />
+</shape>
+''',
+
+    "app/src/main/res/drawable/bg_input_box.xml": r'''<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/input_bg" />
+    <corners android:radius="14dp" />
+    <stroke android:width="1dp" android:color="@color/divider" />
+</shape>
+''',
+
+    "app/src/main/res/drawable/bg_badge_video.xml": r'''<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/pink_light" />
+    <corners android:radius="8dp" />
+</shape>
+''',
+
+    "app/src/main/res/drawable/bg_badge_audio.xml": r'''<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/orange_light" />
+    <corners android:radius="8dp" />
+</shape>
+''',
+
+    "app/src/main/res/drawable/bg_thumb_placeholder.xml": r'''<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/pink_light" />
+    <corners android:radius="14dp" />
+</shape>
+''',
+
+    "app/src/main/res/drawable/ic_paste.xml": r'''<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@color/pink"
+        android:pathData="M19,2h-4.18C14.4,0.84 13.3,0 12,0S9.6,0.84 9.18,2H5C3.9,2 3,2.9 3,4v16c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2V4C21,2.9 20.1,2 19,2zM12,2c0.55,0 1,0.45 1,1s-0.45,1 -1,1s-1,-0.45 -1,-1S11.45,2 12,2zM19,20H5V4h2v3h10V4h2V20z" />
+</vector>
+''',
+
+    "app/src/main/res/drawable/ic_clear.xml": r'''<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@color/text_secondary"
+        android:pathData="M19,6.41L17.59,5 12,10.59 6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 12,13.41 17.59,19 19,17.59 13.41,12z" />
+</vector>
+''',
+
+    "app/src/main/res/drawable/ic_download.xml": r'''<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@color/white"
+        android:pathData="M5,20h14v-2H5V20zM19,9h-4V3H9v6H5l7,7L19,9z" />
+</vector>
+''',
+
+    "app/src/main/res/layout/activity_main.xml": r'''<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/scrollView"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_page"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingBottom="28dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_gradient_header"
+            android:orientation="vertical"
+            android:paddingStart="22dp"
+            android:paddingTop="32dp"
+            android:paddingEnd="22dp"
+            android:paddingBottom="44dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/app_name"
+                android:textColor="@color/white"
+                android:textSize="28sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:alpha="0.92"
+                android:text="@string/tagline"
+                android:textColor="@color/white"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="-26dp"
+            android:layout_marginEnd="16dp"
+            app:cardBackgroundColor="@color/card_bg"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="6dp"
+            app:strokeWidth="0dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:background="@drawable/bg_input_box"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="6dp">
+
+                    <EditText
+                        android:id="@+id/etUrl"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:background="@android:color/transparent"
+                        android:hint="@string/hint_url"
+                        android:imeOptions="actionGo"
+                        android:inputType="textUri"
+                        android:maxLines="1"
+                        android:singleLine="true"
+                        android:textColor="@color/text_primary"
+                        android:textColorHint="@color/text_secondary"
+                        android:textSize="14sp" />
+
+                    <ImageButton
+                        android:id="@+id/btnClear"
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="Clear"
+                        android:src="@drawable/ic_clear" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPaste"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="48dp"
+                        android:layout_marginEnd="10dp"
+                        android:text="Paste"
+                        android:textColor="@color/pink"
+                        app:cornerRadius="12dp"
+                        app:icon="@drawable/ic_paste"
+                        app:iconTint="@color/pink"
+                        app:strokeColor="@color/pink" />
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/btnDownload"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:clickable="true"
+                        android:focusable="true"
+                        app:cardBackgroundColor="@color/pink"
+                        app:cardCornerRadius="12dp"
+                        app:cardElevation="2dp"
+                        app:strokeWidth="0dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:gravity="center"
+                            android:orientation="horizontal">
+
+                            <ProgressBar
+                                android:id="@+id/progressBar"
+                                style="?android:attr/progressBarStyleSmall"
+                                android:layout_width="20dp"
+                                android:layout_height="20dp"
+                                android:layout_marginEnd="8dp"
+                                android:indeterminateTint="@color/white"
+                                android:visibility="gone" />
+
+                            <TextView
+                                android:id="@+id/tvDownloadBtnText"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Download"
+                                android:textColor="@color/white"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+                </LinearLayout>
+
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:scrollbars="none">
+
+                    <com.google.android.material.chip.ChipGroup
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        app:singleLine="true">
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipYoutube"
+                            style="@style/Widget.Material3.Chip.Suggestion"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="YouTube" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipFacebook"
+                            style="@style/Widget.Material3.Chip.Suggestion"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Facebook" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipInstagram"
+                            style="@style/Widget.Material3.Chip.Suggestion"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Instagram" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipTiktok"
+                            style="@style/Widget.Material3.Chip.Suggestion"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="TikTok" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipTwitter"
+                            style="@style/Widget.Material3.Chip.Suggestion"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Twitter / X" />
+                    </com.google.android.material.chip.ChipGroup>
+                </HorizontalScrollView>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardError"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="14dp"
+            android:layout_marginEnd="16dp"
+            android:visibility="gone"
+            app:cardBackgroundColor="@color/error_bg"
+            app:cardCornerRadius="14dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="0dp">
+
+            <TextView
+                android:id="@+id/tvError"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="14dp"
+                android:textColor="@color/error_text"
+                android:textSize="13sp" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardResult"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="16dp"
+            android:layout_marginEnd="16dp"
+            android:visibility="gone"
+            app:cardBackgroundColor="@color/card_bg"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="4dp"
+            app:strokeWidth="0dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="185dp">
+
+                    <ImageView
+                        android:id="@+id/ivThumb"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/bg_thumb_placeholder"
+                        android:contentDescription="Thumbnail"
+                        android:scaleType="centerCrop"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/tvThumbPlaceholder"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/bg_thumb_placeholder"
+                        android:gravity="center"
+                        android:text="Video Ready to Download"
+                        android:textColor="@color/pink"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/tvPlatform"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:text="YouTube"
+                    android:textColor="@color/text_primary"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvFormatCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="0 format(s) found"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="12dp"
+                    android:layout_marginBottom="8dp"
+                    android:background="@color/divider" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rvFormats"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:overScrollMode="never" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="18dp"
+            android:layout_marginEnd="16dp"
+            app:cardBackgroundColor="@color/card_bg"
+            app:cardCornerRadius="18dp"
+            app:cardElevation="2dp"
+            app:strokeWidth="0dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="How It Works"
+                    android:textColor="@color/text_primary"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:lineSpacingExtra="4dp"
+                    android:text="1. Copy any video link from YouTube, Facebook, Instagram, TikTok or X.\n2. Tap Paste or share directly to YTGrab.\n3. Tap Download and save your preferred video or audio quality."
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>
+''',
+
+    "app/src/main/res/layout/item_format.xml": r'''<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp">
+
+    <TextView
+        android:id="@+id/tvBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_badge_video"
+        android:minWidth="68dp"
+        android:paddingStart="10dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="6dp"
+        android:gravity="center"
+        android:text="720P"
+        android:textColor="@color/pink"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="10dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tvType"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Video (MP4)"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvSize"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="~24.5 MB"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnSave"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:insetTop="0dp"
+        android:insetBottom="0dp"
+        android:text="Save"
+        android:textColor="@color/white"
+        android:textSize="13sp"
+        app:backgroundTint="@color/pink"
+        app:cornerRadius="10dp"
+        app:icon="@drawable/ic_download"
+        app:iconSize="16dp"
+        app:iconTint="@color/white" />
+</LinearLayout>
+'''
+}
+
+for rel_path, content in FILES.items():
+    full_path = os.path.join(ROOT, rel_path)
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+    with open(full_path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(content)
+
+print(f"Done! {len(FILES)} files created inside '{ROOT}/'.")
